@@ -831,6 +831,20 @@ export default function KanbanBoard() {
       alert("Gagal update status task.");
     } else {
       fetchTasks(); // Force Refresh UI
+
+      // NOTIFICATION TRIGGER (Telegram)
+      // Only if User is NOT Admin AND Status is moving to IN_PROGRESS or DONE
+      if (!isAdmin && (newStatus === 'IN_PROGRESS' || newStatus === 'DONE')) {
+        const currentUserDisplay = session?.user?.user_metadata?.full_name || session?.user?.email;
+        const statusText = newStatus === 'IN_PROGRESS' ? 'sedang dikerjakan (In Progress)' : 'telah selesai (Done)';
+        const message = `🔔 <b>Update Task</b>\nUser: ${currentUserDisplay}\nTask: <b>${currentTask.title}</b>\nStatus: ${statusText}`;
+
+        fetch('/api/send-notification', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message })
+        });
+      }
     }
   };
 
