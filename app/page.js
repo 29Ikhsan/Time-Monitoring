@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Clock, CheckCircle, User, X, Plus, RotateCcw, Save, Edit2, FileSpreadsheet, Calendar, Upload, LayoutDashboard, Kanban as KanbanIcon, TrendingUp, BarChart3, Trash2, Lock as LockIcon, Unlock as UnlockIcon, Link as LinkIcon, PlayCircle, PauseCircle, LogOut } from 'lucide-react';
+import { Clock, CheckCircle, CheckSquare, User, X, Plus, RotateCcw, Save, Edit2, FileSpreadsheet, Calendar, Upload, LayoutDashboard, Kanban as KanbanIcon, TrendingUp, BarChart3, Trash2, Lock as LockIcon, Unlock as UnlockIcon, Link as LinkIcon, PlayCircle, PauseCircle, LogOut } from 'lucide-react';
+
+
 import * as XLSX from 'xlsx';
 import { supabase } from '../lib/supabaseClient';
 
@@ -65,6 +67,66 @@ const AuthPage = () => {
         <p className="mt-8 text-center text-xs text-slate-400">
           Belum punya akun? Hubungi Admin.
         </p>
+      </div>
+    </div>
+  );
+};
+
+// === COMPONENT: Setup Profile Page (Nama Panggilan) ===
+const ProfileSetupPage = ({ session }) => {
+  const [fullName, setFullName] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSaveProfile = async (e) => {
+    e.preventDefault();
+    if (!fullName.trim()) return alert("Nama panggilan wajib diisi!");
+
+    setLoading(true);
+    const { error } = await supabase.auth.updateUser({
+      data: { full_name: fullName }
+    });
+
+    if (error) {
+      alert("Gagal menyimpan profil: " + error.message);
+    } else {
+      window.location.reload(); // Reload untuk refresh session metadata
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div className="min-h-screen bg-[#253256] flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 animate-in fade-in zoom-in duration-300">
+        <div className="text-center mb-8">
+          <div className="bg-blue-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+            <User size={32} className="text-blue-600" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-800">Satu Langkah Lagi!</h1>
+          <p className="text-slate-500 mt-2">Siapa nama panggilan Anda? (Max 8 Huruf)</p>
+          <p className="text-xs text-slate-400 mt-1">Ini akan jadi nama di kartu tugas Anda.</p>
+        </div>
+
+        <form onSubmit={handleSaveProfile} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Nama Panggilan</label>
+            <input
+              type="text"
+              required
+              maxLength={8}
+              className="w-full px-4 py-2 rounded-lg border border-slate-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all uppercase"
+              placeholder="IKHSAN"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value.toUpperCase())}
+            />
+          </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-all shadow-lg shadow-blue-600/30 flex justify-center items-center gap-2"
+          >
+            {loading ? 'Menyimpan...' : 'Simpan & Masuk'}
+          </button>
+        </form>
       </div>
     </div>
   );
@@ -162,6 +224,20 @@ const TaskCard = ({ task, onMove, onEdit, onDelete, isAdmin, onRefresh, isSelect
     }
   };
 
+  const handleSubtaskToggle = async (subtaskIndex) => {
+    const updatedSubtasks = [...(task.subtasks || [])];
+    updatedSubtasks[subtaskIndex].done = !updatedSubtasks[subtaskIndex].done;
+
+    const { error } = await supabase
+      .from('tasks')
+      .update({ subtasks: updatedSubtasks })
+      .eq('id', task.id);
+
+    if (!error) {
+      onRefresh();
+    }
+  };
+
   return (
     <div className={`bg-white p-4 rounded-lg shadow-sm border mb-3 hover:shadow-md transition-all relative group ${isSelected ? 'border-blue-500 ring-2 ring-blue-100' : 'border-slate-200'}`}>
 
@@ -247,6 +323,23 @@ const TaskCard = ({ task, onMove, onEdit, onDelete, isAdmin, onRefresh, isSelect
         )}
       </div>
 
+      {/* SUBTASKS LIST (Visible on Card) */}
+      {task.subtasks && task.subtasks.length > 0 && (
+        <div className="space-y-1 mb-3 pt-2 border-t border-slate-50">
+          {task.subtasks.map((sub, idx) => (
+            <div key={idx} className="flex items-start gap-2 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={sub.done}
+                onChange={() => handleSubtaskToggle(idx)}
+                className={`mt-0.5 w-3 h-3 rounded border-slate-300 cursor-pointer ${sub.done ? 'accent-emerald-500' : 'accent-slate-300'}`}
+              />
+              <span className={`${sub.done ? 'line-through text-slate-400' : ''}`}>{sub.title}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Footer: Informasi Waktu & Aksi */}
       <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
 
@@ -312,13 +405,30 @@ const TaskCard = ({ task, onMove, onEdit, onDelete, isAdmin, onRefresh, isSelect
             </button>
           )}
           {task.status === 'IN_PROGRESS' && (
-            <button
-              onClick={() => onMove(task.id, 'DONE')}
-              className="text-xs text-white px-3 py-1 rounded hover:opacity-90 font-medium flex items-center gap-1"
-              style={{ backgroundColor: '#279c5a' }}
-            >
-              <CheckCircle size={12} /> Selesai
-            </button>
+            (() => {
+              const subtasks = task.subtasks || [];
+              const totalSub = subtasks.length;
+              const doneSub = subtasks.filter(s => s.done).length;
+              const allDone = totalSub === 0 || doneSub === totalSub;
+
+              return (
+                <button
+                  onClick={() => {
+                    if (allDone) onMove(task.id, 'DONE');
+                    else alert("Harap selesaikan semua Sub-Task terlebih dahulu!");
+                  }}
+                  disabled={!allDone}
+                  className={`text-xs text-white px-3 py-1 rounded font-medium flex items-center gap-1 transition-all ${allDone ? 'hover:opacity-90' : 'opacity-50 cursor-not-allowed'}`}
+                  style={{ backgroundColor: allDone ? '#279c5a' : '#94a3b8' }}
+                >
+                  {allDone ? (
+                    <><CheckCircle size={12} /> Selesai</>
+                  ) : (
+                    <><LockIcon size={10} /> {doneSub}/{totalSub}</>
+                  )}
+                </button>
+              );
+            })()
           )}
         </div>
       </div>
@@ -520,10 +630,36 @@ export default function KanbanBoard() {
   }, []); // Run once on mount
 
   const fetchTasks = async () => {
-    const { data, error } = await supabase
+    // PROTEKSI: Cek session & role untuk filter data
+    const currentUser = (await supabase.auth.getUser()).data.user;
+    if (!currentUser) return; // Should be handled by AuthGuard
+
+    const userEmail = currentUser.email;
+    const userName = currentUser.user_metadata?.full_name;
+
+    // Check Admin Status (Hardcoded for simplicity in this function too to be safe)
+    const adminEmails = ['ikhsan29@gmail.com', 'admin@psc.co.id', 'boss@psc.co.id'];
+    const isUserAdmin = adminEmails.includes(userEmail);
+
+    let query = supabase
       .from('tasks')
       .select('*')
       .order('created_at', { ascending: true });
+
+    // FILTER LOGIC:
+    // Jika BUKAN Admin, hanya ambil task milik sendiri
+    if (!isUserAdmin) {
+      if (userName) {
+        query = query.eq('assignee', userName);
+      } else {
+        // Edge case: User baru belum punya nama tapi lolos guard?
+        // Return empty to be safe
+        setTasks([]);
+        return;
+      }
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       console.error('Error fetching tasks:', error);
@@ -706,9 +842,9 @@ export default function KanbanBoard() {
       description: task.description,
       assignee: task.assignee,
       priority: task.priority,
-      priority: task.priority,
       monthPeriod: task.monthPeriod || task.month_period || selectedMonth, // Handle DB column name diff
-      externalUrl: task.externalUrl || task.external_url || ''
+      externalUrl: task.externalUrl || task.external_url || '',
+      subtasks: task.subtasks || []
     });
     setAttachment(null);
     setIsModalOpen(true);
@@ -717,7 +853,16 @@ export default function KanbanBoard() {
   // Logic Buka Modal Baru
   const handleNewClick = () => {
     setEditingId(null); // Reset mode edit
-    setNewTask({ title: '', description: '', assignee: '', priority: 'Medium', monthPeriod: selectedMonth, externalUrl: '' });
+    const currentUser = session?.user?.user_metadata?.full_name || '';
+    setNewTask({
+      title: '',
+      description: '',
+      assignee: currentUser, // Auto-fill Assignee
+      priority: 'Medium',
+      monthPeriod: selectedMonth,
+      externalUrl: '',
+      subtasks: []
+    });
     setAttachment(null);
     setIsModalOpen(true);
   };
@@ -762,7 +907,8 @@ export default function KanbanBoard() {
         assignee: newTask.assignee,
         priority: newTask.priority,
         month_period: newTask.monthPeriod,
-        external_url: newTask.externalUrl || null
+        external_url: newTask.externalUrl || null,
+        subtasks: newTask.subtasks || [] // Save subtasks
         // Status default handled by DB default or Logic below
       };
 
@@ -795,7 +941,7 @@ export default function KanbanBoard() {
       if (error) throw error;
 
       // SUCCESS
-      setNewTask({ title: '', description: '', assignee: '', priority: 'Medium', monthPeriod: selectedMonth, externalUrl: '' });
+      setNewTask({ title: '', description: '', assignee: '', priority: 'Medium', monthPeriod: selectedMonth, externalUrl: '', subtasks: [] });
       setAttachment(null);
       setIsModalOpen(false);
       setEditingId(null);
@@ -828,30 +974,17 @@ export default function KanbanBoard() {
   };
 
   // Auto-Set Admin based on Email (Hardcoded for simplicity)
-  useEffect(() => {
-    if (session?.user?.email) {
-      // Daftar Email yang otomatis jadi Admin
-      const adminEmails = ['ikhsan29@gmail.com', 'admin@psc.co.id', 'boss@psc.co.id'];
-      if (adminEmails.includes(session.user.email)) {
-        setIsAdmin(true);
-      }
-    }
-  }, [session]);
+  // Also determines visibility of Admin Toggle
+  // Auto-Set Admin based on Email (Hardcoded for simplicity)
+  // Also determines visibility of Admin Toggle
+  const adminEmails = ['ikhsan29@gmail.com', 'admin@psc.co.id', 'boss@psc.co.id'];
+  const isSystemAdmin = !!(session?.user?.email && adminEmails.includes(session.user.email));
 
-  const handleAdminToggle = () => {
-    if (isAdmin) {
-      setIsAdmin(false);
-      alert("Admin Mode Nonaktif (Fitur Hapus & Undo disembunyikan)");
-    } else {
-      const pin = prompt("Masukkan PIN Admin:");
-      if (pin === "9999") {
-        setIsAdmin(true);
-        alert("Admin Mode Aktif! (Fitur Hapus & Undo terbuka)");
-      } else {
-        alert("PIN Salah!");
-      }
-    }
-  };
+  useEffect(() => {
+    setIsAdmin(isSystemAdmin);
+  }, [isSystemAdmin]);
+
+
 
   // Prevent hydration mismatch by rendering only after mount
   const [mounted, setMounted] = useState(false);
@@ -865,6 +998,11 @@ export default function KanbanBoard() {
   // AUTH GUARD
   if (!session) {
     return <AuthPage />;
+  }
+
+  // PROFILE SETUP GUARD (Check if Name is set)
+  if (session && !session.user?.user_metadata?.full_name) {
+    return <ProfileSetupPage session={session} />;
   }
 
   const handleToggleSelect = (id, checked) => {
@@ -888,7 +1026,12 @@ export default function KanbanBoard() {
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-wide leading-none">TimeMonitor</h1>
-              <p className="text-[10px] text-white/50 font-medium mt-1">Logged as: {session?.user?.email}</p>
+              <p className="text-[10px] text-white/50 font-medium mt-1">
+                Logged as: {session?.user?.email}
+                <span className={`ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold ${isAdmin ? 'bg-red-500 text-white' : 'bg-blue-500 text-white'}`}>
+                  {isAdmin ? 'ADMIN' : 'STAFF'}
+                </span>
+              </p>
             </div>
 
             {/* LOGOUT BUTTON */}
@@ -900,14 +1043,7 @@ export default function KanbanBoard() {
               <LogOut size={14} />
             </button>
 
-            {/* ADMIN TOGGLE */}
-            <button
-              onClick={handleAdminToggle}
-              className={`ml-2 p-1.5 rounded-full transition-all ${isAdmin ? 'bg-red-500 hover:bg-red-600 text-white shadow-lg ring-2 ring-white/20' : 'bg-white/10 hover:bg-white/20 text-slate-300'}`}
-              title={isAdmin ? "Matikan Mode Admin" : "Masuk Mode Admin"}
-            >
-              {isAdmin ? <UnlockIcon size={14} /> : <LockIcon size={14} />}
-            </button>
+
 
             {/* BULK DELETE BUTTON (Only if items selected) */}
             {isAdmin && selectedTaskIds.length > 0 && (
@@ -1017,12 +1153,14 @@ export default function KanbanBoard() {
             >
               <Save size={16} />
             </button>
-            <button
-              onClick={handleNewClick}
-              className="bg-white/10 hover:bg-white/20 px-3 py-2 rounded text-sm transition-colors flex items-center gap-2"
-            >
-              <Plus size={16} /> <span className="hidden sm:inline">Task</span>
-            </button>
+            {isAdmin && (
+              <button
+                onClick={handleNewClick}
+                className="bg-white/10 hover:bg-white/20 px-3 py-2 rounded text-sm transition-colors flex items-center gap-2"
+              >
+                <Plus size={16} /> <span className="hidden sm:inline">Task</span>
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -1151,16 +1289,89 @@ export default function KanbanBoard() {
 
             <form onSubmit={handleSaveTaskForm} className="p-6 space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-black mb-1">Judul Task</label>
+                <label className="block text-xs font-semibold text-black mb-1">Main Task</label>
                 <input
                   autoFocus
                   type="text"
                   required
-                  className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none text-black"
+                  disabled={!isAdmin & !!editingId} // Disable if editing and not admin (Allow create for now? Or restricting creation too? User said "penambahan ... hanya bisa admin"). Assuming creation is already restricted by "Add Task" button visibility. But editing title should be restricted.
+                  className={`w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none text-black ${!isAdmin && editingId ? 'bg-slate-100 text-slate-500' : ''}`}
                   placeholder="Contoh: Buat Laporan Harian"
                   value={newTask.title}
                   onChange={e => setNewTask({ ...newTask, title: e.target.value })}
                 />
+              </div>
+
+              {/* SUBTASKS SECTION */}
+              <div>
+                <label className="block text-xs font-semibold text-black mb-1">Sub-Task / Checklist</label>
+                <div className="space-y-2">
+                  {/* List Subtasks */}
+                  {(newTask.subtasks || []).map((sub, idx) => (
+                    <div key={idx} className="flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                      <input
+                        type="checkbox"
+                        checked={sub.done}
+                        onChange={(e) => {
+                          const updated = [...(newTask.subtasks || [])];
+                          updated[idx].done = e.target.checked;
+                          setNewTask({ ...newTask, subtasks: updated });
+                        }}
+                        className="rounded accent-blue-600 cursor-pointer w-4 h-4"
+                      />
+                      <input
+                        type="text"
+                        value={sub.title}
+                        disabled={!isAdmin}
+                        onChange={(e) => {
+                          const updated = [...(newTask.subtasks || [])];
+                          updated[idx].title = e.target.value;
+                          setNewTask({ ...newTask, subtasks: updated });
+                        }}
+                        className={`flex-1 bg-transparent outline-none text-sm ${sub.done ? 'line-through text-slate-400' : 'text-slate-700'}`}
+                        onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }} // Prevent submit on edit enter
+                      />
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = newTask.subtasks.filter((_, i) => i !== idx);
+                            setNewTask({ ...newTask, subtasks: updated });
+                          }}
+                          className="text-slate-400 hover:text-red-500"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+
+                  {/* Add New Subtask Input */}
+                  {isAdmin && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <Plus size={16} className="text-slate-400" />
+                      <input
+                        type="text"
+                        placeholder="Tambah subtask... (Enter)"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault(); // Stop form submission!
+                            e.stopPropagation();
+                            const val = e.target.value;
+                            if (val.trim()) {
+                              setNewTask(prev => ({
+                                ...prev,
+                                subtasks: [...(prev.subtasks || []), { title: val, done: false }]
+                              }));
+                              e.target.value = '';
+                            }
+                          }
+                        }}
+                        className="flex-1 text-sm border-b border-slate-200 focus:border-blue-500 outline-none py-1 bg-transparent text-black"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div>
@@ -1173,6 +1384,8 @@ export default function KanbanBoard() {
                 ></textarea>
               </div>
 
+
+
               {/* ATTACHMENT INPUT */}
               <div>
                 <label className="block text-xs font-semibold text-black mb-1">Lampiran File (Opsional)</label>
@@ -1183,6 +1396,9 @@ export default function KanbanBoard() {
                 />
                 {attachment && <p className="text-xs text-green-600 mt-1">File terpilih: {attachment.name}</p>}
               </div>
+
+              {/* SUBTASKS SECTION */}
+
 
               {/* EXTERNAL URL INPUT */}
               <div>
@@ -1201,15 +1417,18 @@ export default function KanbanBoard() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-black mb-1">Assignee (Nama)</label>
+                  <label className="block text-xs font-semibold text-black mb-1">Assignee (Penanggung Jawab)</label>
                   <input
                     type="text"
+                    required
                     maxLength={8}
-                    className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none uppercase text-black"
+                    disabled={!isAdmin} // Lock for non-admin
+                    className={`w-full text-sm border border-slate-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none text-black uppercase ${!isAdmin ? 'bg-slate-100 text-slate-500' : ''}`}
                     placeholder="NAMA"
                     value={newTask.assignee}
-                    onChange={e => setNewTask({ ...newTask, assignee: e.target.value })}
+                    onChange={e => setNewTask({ ...newTask, assignee: e.target.value.toUpperCase() })}
                   />
+                  {!isAdmin && <p className="text-[10px] text-slate-400 mt-1">*Otomatis terisi sesuai nama Anda</p>}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-black mb-1">Prioritas</label>
@@ -1244,9 +1463,10 @@ export default function KanbanBoard() {
               </div>
             </form>
           </div>
-        </div>
-      )}
+        </div >
+      )
+      }
 
-    </div>
+    </div >
   );
 }
