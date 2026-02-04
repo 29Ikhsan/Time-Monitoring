@@ -1,11 +1,12 @@
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { siteConfig } from "./siteConfig";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata = {
-  title: "TimeMonitor - Team Task Tracking",
-  description: "Simple Kanban with Time Tracking",
+  title: siteConfig.appName + " - Team Task Tracking",
+  description: siteConfig.appDescription,
 };
 
 export default function RootLayout({ children }) {

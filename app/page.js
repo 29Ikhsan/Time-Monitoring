@@ -710,7 +710,8 @@ export default function KanbanBoard() {
       Mulai: task.started_at ? new Date(task.started_at).toLocaleString() : '-',
       Selesai: task.finished_at ? new Date(task.finished_at).toLocaleString() : '-',
       Durasi_Jam: calculateDurationDecimal(task.started_at, task.finished_at), // Durasi angka decimal
-      Durasi_Teks: calculateDuration(task.started_at, task.finished_at) // Durasi text readable
+      Durasi_Teks: calculateDuration(task.started_at, task.finished_at), // Durasi text readable
+      Subtasks: (task.subtasks || []).map(s => `[${s.done ? 'x' : ' '}] ${s.title}`).join(' | ') // Format: [x] Title | [ ] Title
     }));
 
     // 2. Buat Worksheet & Workbook
@@ -751,6 +752,14 @@ export default function KanbanBoard() {
           status: row['Status'] ? row['Status'].toUpperCase() : 'TODO',
           month_period: selectedMonth, // Note: DB column is month_period
           monthPeriod: selectedMonth, // Keep frontend compability
+          // Parse Subtasks from string "[x] Title | [ ] Title"
+          subtasks: (row['Subtasks'] || row['Subtask'] || '').split('|').filter(s => s.trim()).map(s => {
+            const clean = s.trim();
+            const isDone = clean.startsWith('[x]') || clean.startsWith('[v]') || clean.toLowerCase().startsWith('done');
+            // Remove prefix like "[x] " or "done: "
+            const title = clean.replace(/^\[.\]\s*/, '').replace(/^done:?\s*/i, '').trim();
+            return { title, done: isDone };
+          })
           // created_at auto
         }));
 
@@ -763,7 +772,8 @@ export default function KanbanBoard() {
             assignee: t.assignee,
             priority: t.priority,
             status: t.status,
-            month_period: t.monthPeriod
+            month_period: t.monthPeriod,
+            subtasks: t.subtasks // Save subtasks
           }));
 
           const { error } = await supabase.from('tasks').insert(dbPayload);
@@ -1031,15 +1041,20 @@ export default function KanbanBoard() {
     <div className="min-h-screen bg-slate-50 font-sans pb-[25vh]"> {/* White space bawah 25% */}
 
 
+      import {siteConfig} from "./siteConfig";
+
+      // ... previous imports ...
+
+      // Inside Component render:
       {/* Header */}
-      <header className="text-white p-6 shadow-md" style={{ backgroundColor: '#253256' }}>
+      <header className="text-white p-6 shadow-md" style={{ backgroundColor: siteConfig.headerColor }}>
         <div className="max-w-[95%] mx-auto flex justify-between items-center sm:flex-row flex-col gap-4">
           <div className="flex items-center gap-3">
             <div className="bg-white p-1 rounded-lg">
-              <img src="/logo.jpg" alt="PSC Consulting" className="h-12 w-auto object-contain" />
+              <img src={siteConfig.logoPath} alt={siteConfig.companyName} className="h-12 w-auto object-contain" />
             </div>
             <div>
-              <h1 className="text-xl font-bold tracking-wide leading-none">TimeMonitor</h1>
+              <h1 className="text-xl font-bold tracking-wide leading-none">{siteConfig.appName}</h1>
               <p className="text-[10px] text-white/50 font-medium mt-1">
                 Logged as: {session?.user?.email}
                 <span className={`ml-2 px-1.5 py-0.5 rounded text-[9px] font-bold ${isAdmin ? 'bg-red-500 text-white' : 'bg-blue-500 text-white'}`}>
