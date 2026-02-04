@@ -1,5 +1,6 @@
 "use client";
 
+import { siteConfig } from "./siteConfig";
 import React, { useState, useEffect, useRef } from 'react';
 import { Clock, CheckCircle, CheckSquare, User, X, Plus, RotateCcw, Save, Edit2, FileSpreadsheet, Calendar, Upload, LayoutDashboard, Kanban as KanbanIcon, TrendingUp, BarChart3, Trash2, Lock as LockIcon, Unlock as UnlockIcon, Link as LinkIcon, PlayCircle, PauseCircle, LogOut } from 'lucide-react';
 
@@ -605,7 +606,13 @@ export default function KanbanBoard() {
   // 1. Fetch Data Initial & Realtime
   useEffect(() => {
     // Cek Session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.error("Session Error:", error.message);
+        if (error.message.includes('Refresh Token')) {
+          supabase.auth.signOut(); // Force logout if token corrupted
+        }
+      }
       setSession(session);
       if (session) fetchTasks(); // Only fetch if logged in
     });
@@ -631,8 +638,16 @@ export default function KanbanBoard() {
 
   const fetchTasks = async () => {
     // PROTEKSI: Cek session & role untuk filter data
-    const currentUser = (await supabase.auth.getUser()).data.user;
-    if (!currentUser) return; // Should be handled by AuthGuard
+    const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !currentUser) {
+      console.error("Auth Error:", userError?.message);
+      if (userError?.message?.includes('Refresh Token')) {
+        await supabase.auth.signOut();
+        window.location.reload();
+      }
+      return;
+    }
 
     const userEmail = currentUser.email;
     const userName = currentUser.user_metadata?.full_name;
@@ -1041,11 +1056,7 @@ export default function KanbanBoard() {
     <div className="min-h-screen bg-slate-50 font-sans pb-[25vh]"> {/* White space bawah 25% */}
 
 
-      import {siteConfig} from "./siteConfig";
 
-      // ... previous imports ...
-
-      // Inside Component render:
       {/* Header */}
       <header className="text-white p-6 shadow-md" style={{ backgroundColor: siteConfig.headerColor }}>
         <div className="max-w-[95%] mx-auto flex justify-between items-center sm:flex-row flex-col gap-4">
