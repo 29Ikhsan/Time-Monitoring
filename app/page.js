@@ -248,13 +248,7 @@ const TaskCard = ({ task, onMove, onEdit, onDelete, isAdmin, onRefresh, isSelect
       onDragStart={(e) => onMove(e, task.id)}
       className={`bg-white p-4 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-all group relative ${isSelected ? 'ring-2 ring-blue-500' : ''}`}
     >
-      {/* Due Date Badge */}
-      {task.due_date && (
-        <div className={`absolute top-2 right-2 text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 ${isOverdue ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
-          <Calendar size={10} />
-          {new Date(task.due_date).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-        </div>
-      )}
+
 
       {/* CHECKBOX SELECTION (ADMIN ONLY) */}
       {isAdmin && (
@@ -356,41 +350,51 @@ const TaskCard = ({ task, onMove, onEdit, onDelete, isAdmin, onRefresh, isSelect
       )}
 
       {/* Footer: Informasi Waktu & Aksi */}
-      <div className="pt-3 border-t border-slate-100 flex justify-between items-center">
+      <div className="pt-3 border-t border-slate-100 flex flex-col gap-3">
 
-        {/* Tampilan Durasi Jika Selesai */}
-        {task.status === 'DONE' ? (
-          <div className="text-xs text-[#279c5a] font-medium flex items-center gap-1">
-            <Clock size={12} />
-            {formatDuration(duration)}
-          </div>
-        ) : task.status === 'IN_PROGRESS' ? (
-          <div className="flex items-center gap-2">
-            <div className={`text-xs font-medium flex items-center gap-1 ${task.is_paused ? 'text-amber-500' : 'text-blue-600'}`}>
+        {/* ROW 1: STATUS & DUE DATE */}
+        <div className="flex justify-between items-start">
+
+          {/* Left: Status / Duration */}
+          {task.status === 'DONE' ? (
+            <div className="text-xs text-[#279c5a] font-medium flex items-center gap-1">
               <Clock size={12} />
-              {task.is_paused ? 'Paused: ' : 'Berjalan: '} {formatDuration(duration)}
+              {formatDuration(duration)}
             </div>
+          ) : task.status === 'IN_PROGRESS' ? (
+            <div className="flex items-center gap-2">
+              <div className={`text-xs font-medium flex items-center gap-1 ${task.is_paused ? 'text-amber-500' : 'text-blue-600'}`}>
+                <Clock size={12} />
+                {task.is_paused ? 'Paused: ' : 'Berjalan: '} {formatDuration(duration)}
+              </div>
 
-            {/* Tombol Pause/Resume (Admin Only) */}
-            {isAdmin && (
-              <button
-                onClick={handlePauseToggle}
-                className={`p-1 rounded-full ${task.is_paused ? 'bg-amber-100 text-amber-600 hover:bg-amber-200' : 'bg-blue-100 text-blue-600 hover:bg-blue-200'}`}
-                title={task.is_paused ? "Lanjutkan Task" : "Pause Task"}
-              >
-                {task.is_paused ? <PlayCircle size={14} /> : <PauseCircle size={14} />}
-              </button>
-            )}
-          </div>
-        ) : (
-          <div className="text-xs text-slate-400 italic">
-            Belum mulai
-          </div>
-        )}
+              {/* Pause Button */}
+              {isAdmin && (
+                <button
+                  onClick={handlePauseToggle}
+                  className={`p-1 rounded-full ${task.is_paused ? 'bg-amber-100 text-amber-600 hover:bg-amber-200' : 'bg-blue-100 text-blue-600 hover:bg-blue-200'}`}
+                  title={task.is_paused ? "Lanjutkan Task" : "Pause Task"}
+                >
+                  {task.is_paused ? <PlayCircle size={14} /> : <PauseCircle size={14} />}
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="text-xs text-slate-400 italic">Belum mulai</div>
+          )}
 
-        {/* Tombol Aksi Perpindahan */}
-        <div className="flex gap-1">
-          {/* Tombol Undo: Muncul jika bukan TODO */}
+          {/* Right: Due Date */}
+          {task.due_date && (
+            <div className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 ${isOverdue ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
+              <Calendar size={10} />
+              {new Date(task.due_date).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+            </div>
+          )}
+        </div>
+
+        {/* ROW 2: ACTION BUTTONS (Start, Done, Undo) - Right Aligned */}
+        <div className="flex justify-end gap-1">
+          {/* Tombol Undo */}
           {task.status === 'IN_PROGRESS' && isAdmin && (
             <button
               onClick={() => onMove(task.id, 'TODO')}
@@ -410,7 +414,7 @@ const TaskCard = ({ task, onMove, onEdit, onDelete, isAdmin, onRefresh, isSelect
             </button>
           )}
 
-          {/* Tombol Maju */}
+          {/* Tombol Start */}
           {task.status === 'TODO' && (
             <button
               onClick={() => onMove(task.id, 'IN_PROGRESS')}
@@ -419,6 +423,8 @@ const TaskCard = ({ task, onMove, onEdit, onDelete, isAdmin, onRefresh, isSelect
               Start
             </button>
           )}
+
+          {/* Tombol Selesai */}
           {task.status === 'IN_PROGRESS' && (
             (() => {
               const subtasks = task.subtasks || [];
@@ -625,11 +631,15 @@ export default function KanbanBoard() {
       if (error) {
         console.error("Session Error:", error.message);
         if (error.message.includes('Refresh Token')) {
-          supabase.auth.signOut(); // Force logout if token corrupted
+          localStorage.clear();
+          supabase.auth.signOut().finally(() => window.location.reload());
         }
       }
       setSession(session);
-      if (session) fetchTasks(); // Only fetch if logged in
+      if (session) fetchTasks();
+    }).catch(err => {
+      console.error("Critical Session Error:", err);
+      localStorage.clear();
     });
 
     const { data: { subscription: authListener } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -657,9 +667,13 @@ export default function KanbanBoard() {
 
     if (userError || !currentUser) {
       console.error("Auth Error:", userError?.message);
-      if (userError?.message?.includes('Refresh Token')) {
-        await supabase.auth.signOut();
-        window.location.reload();
+      // Aggressive Recovery for Refresh Token issues
+      if (userError?.message?.includes('Refresh Token') || userError?.message?.includes('Not Found')) {
+        console.warn("Corrupted session detected. Clearing storage and reloading...");
+        localStorage.clear(); // Force clear all local data
+        await supabase.auth.signOut().catch(() => { }); // Try network signout, ignore failure
+        window.location.href = '/'; // Hard redirect to root
+        return;
       }
       return;
     }
@@ -961,8 +975,8 @@ export default function KanbanBoard() {
         assignee: newTask.assignee,
         priority: newTask.priority,
         month_period: newTask.monthPeriod,
-        external_url: newTask.externalUrl || null,
-        due_date: newTask.due_date || null,
+        external_url: newTask.externalUrl,
+        due_date: newTask.due_date ? new Date(newTask.due_date).toISOString() : null,
         subtasks: newTask.subtasks || [] // Save subtasks
         // Status default handled by DB default or Logic below
       };
