@@ -239,8 +239,22 @@ const TaskCard = ({ task, onMove, onEdit, onDelete, isAdmin, onRefresh, isSelect
     }
   };
 
+  const now = new Date();
+  const isOverdue = task.due_date && new Date(task.due_date) < now && task.status !== 'DONE';
+
   return (
-    <div className={`bg-white p-4 rounded-lg shadow-sm border mb-3 hover:shadow-md transition-all relative group ${isSelected ? 'border-blue-500 ring-2 ring-blue-100' : 'border-slate-200'}`}>
+    <div
+      draggable
+      onDragStart={(e) => onMove(e, task.id)}
+      className={`bg-white p-4 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-all group relative ${isSelected ? 'ring-2 ring-blue-500' : ''}`}
+    >
+      {/* Due Date Badge */}
+      {task.due_date && (
+        <div className={`absolute top-2 right-2 text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1 ${isOverdue ? 'bg-red-100 text-red-600' : 'bg-slate-100 text-slate-500'}`}>
+          <Calendar size={10} />
+          {new Date(task.due_date).toLocaleString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+        </div>
+      )}
 
       {/* CHECKBOX SELECTION (ADMIN ONLY) */}
       {isAdmin && (
@@ -590,7 +604,8 @@ export default function KanbanBoard() {
     assignee: '',
     priority: 'Medium',
     monthPeriod: new Date().toISOString().slice(0, 7),
-    externalUrl: ''
+    externalUrl: '',
+    due_date: ''
   });
   const [attachment, setAttachment] = useState(null);
   const [isUploading, setIsUploading] = useState(false); // Loading state
@@ -947,6 +962,7 @@ export default function KanbanBoard() {
         priority: newTask.priority,
         month_period: newTask.monthPeriod,
         external_url: newTask.externalUrl || null,
+        due_date: newTask.due_date || null,
         subtasks: newTask.subtasks || [] // Save subtasks
         // Status default handled by DB default or Logic below
       };
@@ -1470,6 +1486,16 @@ export default function KanbanBoard() {
                   />
                   {!isAdmin && <p className="text-[10px] text-slate-400 mt-1">*Otomatis terisi sesuai nama Anda</p>}
                 </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Due Date</label>
+                  <input
+                    type="datetime-local"
+                    className="w-full text-sm border border-slate-300 rounded-lg px-3 py-2 outline-none focus:border-blue-500 text-slate-600"
+                    value={newTask.due_date || ''}
+                    onChange={e => setNewTask({ ...newTask, due_date: e.target.value })}
+                  />
+                </div>
+
                 <div>
                   <label className="block text-xs font-semibold text-black mb-1">Prioritas</label>
                   <select
